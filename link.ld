@@ -11,6 +11,15 @@ ENTRY(Reset);
 
 EXTERN(RESET_VECTOR);
 
+PROVIDE(NMI = DefaultExceptionHandler);
+PROVIDE(HardFault = DefaultExceptionHandler);
+PROVIDE(MemManage = DefaultExceptionHandler);
+PROVIDE(BusFault = DefaultExceptionHandler);
+PROVIDE(UsageFault = DefaultExceptionHandler);
+PROVIDE(SVCall = DefaultExceptionHandler);
+PROVIDE(PendSV = DefaultExceptionHandler);
+PROVIDE(SysTick = DefaultExceptionHandler);
+
 SECTIONS
 {
   .vector_table ORIGIN(FLASH) :
@@ -20,6 +29,9 @@ SECTIONS
 
     /* Second entry: reset vector */
     KEEP(*(.vector_table.reset_vector));
+
+    /* exception handler */
+    KEEP(*(.vector_table.exceptions));
   } > FLASH
 
   .text :
