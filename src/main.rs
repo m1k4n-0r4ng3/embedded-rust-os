@@ -11,7 +11,13 @@ use cortex_m_semihosting::hprintln;
 mod systick;
 
 mod process;
-use process::ContextFrame;
+use process::Process;
+
+mod linked_list;
+use linked_list::ListItem;
+
+mod scheduler;
+use scheduler::Scheduler;
 
 pub union Vector {
     reserved: u32,
@@ -76,9 +82,6 @@ pub unsafe extern "C" fn SVCall() {
     );
 }
 
-#[link_section = ".app_stack"]
-static mut APP_STACK: [u8; 1024] = [0; 1024];
-
 // The reset vector, a pointer into the reset handler
 #[link_section = ".vector_table.reset_vector"]
 #[no_mangle]
@@ -104,40 +107,63 @@ pub unsafe extern "C" fn Reset() -> ! {
 
     systick::init();
 
-    let ptr = (&APP_STACK[0] as *const u8 as usize) + 1024 - 0x20;
-    let context_frame: &mut ContextFrame = &mut *(ptr as *mut ContextFrame);
+    #[link_section = ".app_stack"]
+    static mut APP_STACK: [u8; 2048] = [0; 2048];
+    static APP_STACK_LEN: usize = 2048;
+    #[link_section = ".app_stack"]
+    static mut APP_STACK2: [u8; 2048] = [0; 2048];
+    static APP_STACK2_LEN: usize = 2048;
+    #[link_section = ".app_stack"]
+    static mut APP_STACK3: [u8; 2048] = [0; 2048];
+    static APP_STACK3_LEN: usize = 2048;
 
-    context_frame.r0 = 0;
-    context_frame.r1 = 0;
-    context_frame.r2 = 0;
-    context_frame.r3 = 0;
-    context_frame.r12= 0;
-    context_frame.lr = 0;
-    context_frame.return_addr = app_main as u32;
-    context_frame.xpsr = 0x0100_0000;
+    let mut process1 = Process::new(&raw mut APP_STACK as *mut u8, &APP_STACK_LEN, app_main);
+    let mut item1 = ListItem::new(process1);
+    let mut process2 = Process::new(&raw mut APP_STACK2 as *mut u8, &APP_STACK2_LEN, app_main2);
+    let mut item2 = ListItem::new(process2);
+    let mut process3 = Process::new(&raw mut APP_STACK3 as *mut u8, &APP_STACK3_LEN, app_main3);
+    let mut item3 = ListItem::new(process3);
 
-    asm!(
-        "msr psp, r0",
-        "svc 0",
-        in("r0") ptr,
-        out("r4") _,
-        out("r5") _,
-        out("r8") _,
-        out("r9") _,
-        out("r10") _,
-        out("r11") _,
-    );
-    
+    let mut sched = Scheduler::new();
+    sched.push(&mut item1);
+    sched.push(&mut item2);
+    sched.push(&mut item3);
+
     hprintln!("Kernel");
-    loop {}
+    hprintln!("App Start");
+
+    sched.exec();
+
+    
 }
 
 extern "C" fn app_main() -> ! {
-    hprintln!("APP");
-    unsafe { 
-        asm!("svc 0");
+    let mut i = 0;
+    loop {
+        hprintln!("APP1: {}", i);
+        unsafe { 
+            asm!("svc 0");
+        }
+        i += 1;
     }
-    loop{}
+}
+
+extern "C" fn app_main2() -> ! {
+    loop {
+        hprintln!("APP2");
+        unsafe { 
+            asm!("svc 0");
+        }
+    }
+}
+
+extern "C" fn app_main3() -> ! {
+    loop {
+        hprintln!("APP3");
+        unsafe { 
+            asm!("svc 0");
+        }
+    }
 }
 
 #[panic_handler]
