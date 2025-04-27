@@ -65,6 +65,11 @@ SECTIONS
     *(.app_stack .app_stack.*);
   } > RAM
   
+  .heap ALIGN(0x08):
+  {
+    *(.heap .heap.*);
+  } > RAM
+  
   /DISCARD/ :
   {
     *(.ARM.exidx .ARM.exidx.*);

@@ -19,6 +19,10 @@ use linked_list::ListItem;
 mod scheduler;
 use scheduler::Scheduler;
 
+extern crate alloc;
+use alloc::{boxed::Box, vec::Vec};
+mod allocator;
+
 pub union Vector {
     reserved: u32,
     handler: unsafe extern "C" fn(),
@@ -117,11 +121,11 @@ pub unsafe extern "C" fn Reset() -> ! {
     static mut APP_STACK3: [u8; 2048] = [0; 2048];
     static APP_STACK3_LEN: usize = 2048;
 
-    let mut process1 = Process::new(&raw mut APP_STACK as *mut u8, &APP_STACK_LEN, app_main);
+    let process1 = Process::new(&raw mut APP_STACK as *mut u8, &APP_STACK_LEN, app_main);
     let mut item1 = ListItem::new(process1);
-    let mut process2 = Process::new(&raw mut APP_STACK2 as *mut u8, &APP_STACK2_LEN, app_main2);
+    let process2 = Process::new(&raw mut APP_STACK2 as *mut u8, &APP_STACK2_LEN, app_main2);
     let mut item2 = ListItem::new(process2);
-    let mut process3 = Process::new(&raw mut APP_STACK3 as *mut u8, &APP_STACK3_LEN, app_main3);
+    let process3 = Process::new(&raw mut APP_STACK3 as *mut u8, &APP_STACK3_LEN, app_main3);
     let mut item3 = ListItem::new(process3);
 
     let mut sched = Scheduler::new();
@@ -129,8 +133,30 @@ pub unsafe extern "C" fn Reset() -> ! {
     sched.push(&mut item2);
     sched.push(&mut item3);
 
-    hprintln!("Kernel");
+    hprintln!("[Kernel]");
     hprintln!("App Start");
+
+    #[link_section = ".heap"]
+    static mut HEAP: [u8; 4096] = [0; 4096];
+    static HEAP_SIZE: usize = 4096;
+    allocator::init_heap(&raw mut HEAP as usize, HEAP_SIZE);
+
+    let heap_value = Box::new(41);
+    hprintln!("[Kernel]: heap_value at {:p}", heap_value);
+
+    let mut vec = Vec::new();
+    for i in 0..10 {
+        vec.push(i);
+    }
+    hprintln!("[Kernel]: vec at {:p}", vec.as_slice());
+
+    // BumpAllocatorだとメモリ不足になる
+    let long_lived = Box::new(1);
+    for i in 0..4096 {
+        let x = Box::new(i);
+        assert_eq!(*x, i);
+    }
+    assert_eq!(*long_lived, 1);
 
     sched.exec();
 
@@ -168,5 +194,6 @@ extern "C" fn app_main3() -> ! {
 
 #[panic_handler]
 fn panic(_panic: &PanicInfo<'_>) -> ! {
+    hprintln!("Panic!");
     loop {}
 }
